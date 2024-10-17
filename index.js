@@ -126,7 +126,7 @@ app.post('/webhooks', async (req, res) => {
 	}
 })
 
-app.post('/health', async (req, res) => {
+app.get('/health', async (req, res) => {
 	res.sendStatus(200)
 })
 
