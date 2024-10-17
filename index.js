@@ -55,6 +55,9 @@ const shopify = shopifyApi({
 	adminApiAccessToken: process.env.SHOPIFY_ACCESS_TOKEN,
 	isEmbeddedApp: false,
 	hostName: process.env.SHOPIFY_SHOP,
+	logger: {
+		level: 'info',
+	},
 })
 
 const app = express()
