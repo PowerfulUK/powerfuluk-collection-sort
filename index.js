@@ -1,6 +1,5 @@
 import dotenv from 'dotenv'
 import express from 'express'
-import crypto from 'crypto'
 import helmet from 'helmet'
 import '@shopify/shopify-api/adapters/node'
 import { shopifyApi, ApiVersion } from '@shopify/shopify-api'
