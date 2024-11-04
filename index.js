@@ -5,11 +5,32 @@ import '@shopify/shopify-api/adapters/node'
 import { shopifyApi, ApiVersion } from '@shopify/shopify-api'
 import { validateWebhook } from './helpers/index.js'
 
+function getRelatedVariantsQuery(ids) {
+	return `
+        query {
+            productVariants(first: 100, query: "${ids
+				.map((id) => `id:${id}`)
+				.join(' OR ')}") {
+                edges {
+                    node {
+                        product {
+                            id
+                        }
+                    }
+                }
+            }
+        }
+        `
+}
+
 function getProductQuery(id) {
 	return `
         query {
             product(id: "gid://shopify/Product/${id}") {
                 id
+                relatedProducts: metafield(namespace: "custom", key: "related_products_from_volo") {
+                    value
+                }
                 collections(first: 10, query: "collection_type:custom") {
                     edges {
                         node {
@@ -31,6 +52,17 @@ function getProductQuery(id) {
         }
     `
 }
+
+const METAFIELD_M = `
+        mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) {
+            metafieldsSet(metafields: $metafields) {
+                userErrors {
+                    field
+                    message
+                }
+            }
+        }
+    `
 
 const REORDER_Q = `
     mutation collectionReorderProducts($id: ID!, $moves: [MoveInput!]!) {
@@ -72,6 +104,7 @@ async function handleProductUpdate(id) {
 		const client = new shopify.clients.Graphql({ session })
 		const response = await client.request(getProductQuery(id))
 
+		// Update collections order
 		for (const collection of response.data.product.collections.edges) {
 			const moves = [...collection.node.products.edges]
 				.sort(
@@ -99,8 +132,39 @@ async function handleProductUpdate(id) {
 					moves,
 				},
 			})
+		}
 
-			console.log(JSON.stringify(editResponse.data, null, 2))
+		// Update related products
+		if (response.data.product.relatedProducts?.value) {
+			const relatedVariantIds = JSON.parse(
+				response.data.product.relatedProducts.value
+			)
+
+			const query = getRelatedVariantsQuery(relatedVariantIds)
+			const relatedVariants = await client.request(query)
+
+			const relatedProductIds =
+				relatedVariants.data.productVariants.edges.map(
+					({ node }) => node.product.id
+				)
+
+			const metafield = {
+				key: 'related_products',
+				namespace: 'shopify--discovery--product_recommendation',
+				ownerId: response.data.product.id,
+				type: 'list.product_reference',
+				value: JSON.stringify(relatedProductIds),
+			}
+
+			const metafields = [metafield]
+
+			const metafieldResponse = await client.request(METAFIELD_M, {
+				variables: {
+					metafields,
+				},
+			})
+
+			// const
 		}
 	} catch (error) {
 		console.error(error)
@@ -135,4 +199,4 @@ app.listen(PORT, () => {
 	console.log(`Server is running on port ${PORT}`)
 })
 
-// handleProductUpdate('8515057680670')
+handleProductUpdate('8514123333918')
