@@ -179,8 +179,6 @@ async function handleProductUpdate(id) {
 					)
 				)
 			}
-
-			// const
 		}
 	} catch (error) {
 		console.error(error)
