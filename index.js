@@ -132,6 +132,14 @@ async function handleProductUpdate(id) {
 					moves,
 				},
 			})
+
+			if (editResponse.data.collectionReorderProducts.userErrors.length) {
+				console.error(
+					JSON.stringify(
+						editResponse.data.collectionReorderProducts.userErrors
+					)
+				)
+			}
 		}
 
 		// Update related products
@@ -163,6 +171,14 @@ async function handleProductUpdate(id) {
 					metafields,
 				},
 			})
+
+			if (metafieldResponse.data.metafieldsSet.userErrors.length) {
+				console.error(
+					JSON.stringify(
+						metafieldResponse.data.metafieldsSet.userErrors
+					)
+				)
+			}
 
 			// const
 		}
