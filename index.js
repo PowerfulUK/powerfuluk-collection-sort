@@ -147,6 +147,8 @@ async function handleProductUpdate(id) {
 			const relatedVariantIds = JSON.parse(
 				response.data.product.relatedProducts.value
 			)
+				.map((id) => id.split(','))
+				.flat()
 
 			const query = getRelatedVariantsQuery(relatedVariantIds)
 			const relatedVariants = await client.request(query)
