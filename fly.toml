@@ -1,0 +1,25 @@
+# fly.toml app configuration file generated for powerfuluk-collection-sort on 2024-11-14T17:11:22+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'powerfuluk-collection-sort'
+primary_region = 'lhr'
+
+[build]
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+  max_machines_running = 1
+  processes = ['app']
+
+[[vm]]
+  size = 'shared-cpu-1x'
+
+
+[env]
+    SHOPIFY_SHOP = "4ee229.myshopify.com"

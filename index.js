@@ -206,13 +206,11 @@ app.post('/webhooks', async (req, res) => {
 	}
 })
 
-app.get('/health', async (req, res) => {
-	res.sendStatus(200)
-})
+// app.get('/health', async (req, res) => {
+// 	res.sendStatus(200)
+// })
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
 	console.log(`Server is running on port ${PORT}`)
 })
-
-handleProductUpdate('8514123333918')
