@@ -80,28 +80,53 @@ const REORDER_Q = `
 
 dotenv.config()
 
-const shopify = shopifyApi({
-	apiSecretKey: process.env.SHOPIFY_SECRET_KEY,
-	apiVersion: ApiVersion.October24,
-	isCustomStoreApp: true,
-	adminApiAccessToken: process.env.SHOPIFY_ACCESS_TOKEN,
-	isEmbeddedApp: false,
-	hostName: process.env.SHOPIFY_SHOP,
-	logger: {
-		level: 'info',
-	},
-})
-
 const app = express()
 app.use(helmet())
 app.use(express.raw({ type: 'application/json' }))
 
-async function handleProductUpdate(id) {
+/**
+ * Get Shopify GraphQL client for the specified shop.
+ *
+ * @param {string} shop - The shop domain.
+ * @returns {shopify.clients.Graphql} - The Shopify GraphQL client.
+ */
+function getClient(shop) {
+	let apiSecretKey
+	let adminApiAccessToken
+
+	switch (shop) {
+		case '4ee229.myshopify.com':
+			apiSecretKey = process.env.SHOPIFY_SECRET_KEY_PUK
+			adminApiAccessToken = process.env.SHOPIFY_ACCESS_TOKEN_PUK
+			break
+		case 'trade4x4.myshopify.com':
+			apiSecretKey = process.env.SHOPIFY_SECRET_KEY_TRADE
+			adminApiAccessToken = process.env.SHOPIFY_ACCESS_TOKEN_TRADE
+			break
+	}
+
+	const shopify = shopifyApi({
+		apiSecretKey,
+		apiVersion: ApiVersion.October24,
+		isCustomStoreApp: true,
+		adminApiAccessToken,
+		isEmbeddedApp: false,
+		hostName: shop,
+		logger: {
+			level: 0,
+		},
+	})
+
+	const session = shopify.session.customAppSession(shop)
+	const client = new shopify.clients.Graphql({ session })
+
+	return client
+}
+
+async function handleProductUpdate(id, shop) {
+	console.log(`Handling product update for ${id} in ${shop}`)
 	try {
-		const session = shopify.session.customAppSession(
-			process.env.SHOPIFY_SHOP
-		)
-		const client = new shopify.clients.Graphql({ session })
+		const client = getClient(shop)
 		const response = await client.request(getProductQuery(id))
 
 		// Update collections order
@@ -143,7 +168,10 @@ async function handleProductUpdate(id) {
 		}
 
 		// Update related products
-		if (response.data.product.relatedProducts?.value) {
+		if (
+			response.data.product.relatedProducts?.value &&
+			shop === '4ee229.myshopify.com'
+		) {
 			const relatedVariantIds = JSON.parse(
 				response.data.product.relatedProducts.value
 			)
@@ -190,14 +218,26 @@ async function handleProductUpdate(id) {
 app.post('/webhooks', async (req, res) => {
 	try {
 		const tokenHeader = req.headers['x-shopify-hmac-sha256']
-		const isAuth = validateWebhook(req.body, tokenHeader)
+		const shop = req.headers['x-shopify-shop-domain']
+		let sig
+
+		switch (shop) {
+			case '4ee229.myshopify.com':
+				sig = process.env.SHOPIFY_WEBHOOK_AUTH_PUK
+				break
+			case 'trade4x4.myshopify.com':
+				sig = process.env.SHOPIFY_WEBHOOK_AUTH_TRADE
+				break
+		}
+
+		const isAuth = validateWebhook(req.body, tokenHeader, sig)
 		if (!isAuth) {
 			res.sendStatus(401)
 			return
 		}
 
 		const data = JSON.parse(req.body.toString())
-		handleProductUpdate(data.id)
+		handleProductUpdate(data.id, shop)
 
 		res.sendStatus(200)
 	} catch (error) {

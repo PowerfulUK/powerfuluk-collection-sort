@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 
-export function validateWebhook(body, hmacHeader) {
-	const hmac = crypto.createHmac('sha256', process.env.SHOPIFY_WEBHOOK_AUTH)
+export function validateWebhook(body, hmacHeader, sig) {
+	const hmac = crypto.createHmac('sha256', sig)
 	hmac.update(body)
 	const computedHmac = hmac.digest('base64')
 
