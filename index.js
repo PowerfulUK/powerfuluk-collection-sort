@@ -245,10 +245,7 @@ async function handleProductUpdate(id, shop) {
 		}
 
 		// Update related products
-		if (
-			response.data.product.relatedProducts?.value &&
-			shop === '4ee229.myshopify.com'
-		) {
+		if (response.data.product.relatedProducts?.value) {
 			const relatedVariantIds = JSON.parse(
 				response.data.product.relatedProducts.value
 			)
