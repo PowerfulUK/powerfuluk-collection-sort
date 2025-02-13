@@ -5,6 +5,8 @@ import '@shopify/shopify-api/adapters/node'
 import { shopifyApi, ApiVersion } from '@shopify/shopify-api'
 import { validateWebhook } from './helpers/index.js'
 
+dotenv.config()
+
 function getRelatedVariantsQuery(ids) {
 	return `
         query {
@@ -78,19 +80,88 @@ const REORDER_Q = `
     }
 `
 
-dotenv.config()
-
 const app = express()
 app.use(helmet())
 app.use(express.raw({ type: 'application/json' }))
 
-/**
- * Get Shopify GraphQL client for the specified shop.
- *
- * @param {string} shop - The shop domain.
- * @returns {shopify.clients.Graphql} - The Shopify GraphQL client.
- */
-function getClient(shop) {
+setUpSubscriptions()
+
+async function setUpSubscriptions() {
+	const shops = ['4ee229.myshopify.com', 'trade4x4.myshopify.com']
+	for (const shop of shops) {
+		const client = getClient(shop)
+
+		const countRes = await client.request(`
+            query {
+                webhookSubscriptions(first: 10) {
+                    edges {
+                        node {
+                            id
+                            topic
+                            endpoint {
+                                __typename
+                                ... on WebhookHttpEndpoint {
+                                    callbackUrl
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        `)
+
+		const webhookNodes = countRes.data.webhookSubscriptions.edges.map(
+			({ node }) => node
+		)
+
+		console.log(JSON.stringify(webhookNodes, null, 2))
+
+		for (const webhookNode of webhookNodes) {
+			await client.request(`
+                mutation {
+                    webhookSubscriptionDelete(id: "${webhookNode.id}") {
+                        deletedWebhookSubscriptionId
+                    }
+                }
+            `)
+		}
+
+		const res = await client.request(
+			`
+            mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $webhookSubscription: WebhookSubscriptionInput!) {
+                webhookSubscriptionCreate(topic: $topic, webhookSubscription: $webhookSubscription) {
+                    userErrors {
+                        field
+                        message
+                    }
+                }
+            }`,
+			{
+				variables: {
+					topic: 'PRODUCTS_UPDATE',
+					webhookSubscription: {
+						callbackUrl:
+							process.env.NODE_ENV === 'production'
+								? `https://${process.env.FLY_APP_NAME}.fly.dev/webhooks-filtered`
+								: `${process.env.HOST}/webhooks-filtered`,
+						format: 'JSON',
+						filter: 'metafields.key:product_order OR metafields.key:related_products_from_volo',
+						includeFields: ['id', 'metafields'],
+						metafieldNamespaces: ['custom'],
+					},
+				},
+			}
+		)
+
+		if (res.data.webhookSubscriptionCreate.userErrors.length) {
+			console.error(
+				JSON.stringify(res.data.webhookSubscriptionCreate.userErrors)
+			)
+		}
+	}
+}
+
+function getShopify(shop) {
 	let apiSecretKey
 	let adminApiAccessToken
 
@@ -116,6 +187,12 @@ function getClient(shop) {
 			level: 0,
 		},
 	})
+
+	return shopify
+}
+
+function getClient(shop) {
+	const shopify = getShopify(shop)
 
 	const session = shopify.session.customAppSession(shop)
 	const client = new shopify.clients.Graphql({ session })
@@ -215,28 +292,55 @@ async function handleProductUpdate(id, shop) {
 	}
 }
 
-app.post('/webhooks', async (req, res) => {
+// app.post('/webhooks', async (req, res) => {
+// 	try {
+// 		const tokenHeader = req.headers['x-shopify-hmac-sha256']
+// 		const shop = req.headers['x-shopify-shop-domain']
+// 		let sig
+
+// 		switch (shop) {
+// 			case '4ee229.myshopify.com':
+// 				sig = process.env.SHOPIFY_WEBHOOK_AUTH_PUK
+// 				break
+// 			case 'trade4x4.myshopify.com':
+// 				sig = process.env.SHOPIFY_WEBHOOK_AUTH_TRADE
+// 				break
+// 		}
+
+// 		const isAuth = validateWebhook(req.body, tokenHeader, sig)
+// 		if (!isAuth) {
+// 			res.sendStatus(401)
+// 			return
+// 		}
+
+// 		const data = JSON.parse(req.body.toString())
+// 		handleProductUpdate(data.id, shop)
+
+// 		res.sendStatus(200)
+// 	} catch (error) {
+// 		console.error(error)
+// 		res.sendStatus(500)
+// 	}
+// })
+
+app.post('/webhooks-filtered', async (req, res) => {
 	try {
-		const tokenHeader = req.headers['x-shopify-hmac-sha256']
 		const shop = req.headers['x-shopify-shop-domain']
-		let sig
 
-		switch (shop) {
-			case '4ee229.myshopify.com':
-				sig = process.env.SHOPIFY_WEBHOOK_AUTH_PUK
-				break
-			case 'trade4x4.myshopify.com':
-				sig = process.env.SHOPIFY_WEBHOOK_AUTH_TRADE
-				break
-		}
+		const { webhooks } = getShopify(shop)
+		const { valid, topic, domain } = await webhooks.validate({
+			rawBody: req.body, // is a string
+			rawRequest: req,
+			rawResponse: res,
+		})
 
-		const isAuth = validateWebhook(req.body, tokenHeader, sig)
-		if (!isAuth) {
-			res.sendStatus(401)
+		if (!valid) {
+			res.send(400)
 			return
 		}
 
 		const data = JSON.parse(req.body.toString())
+
 		handleProductUpdate(data.id, shop)
 
 		res.sendStatus(200)
@@ -245,10 +349,6 @@ app.post('/webhooks', async (req, res) => {
 		res.sendStatus(500)
 	}
 })
-
-// app.get('/health', async (req, res) => {
-// 	res.sendStatus(200)
-// })
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
