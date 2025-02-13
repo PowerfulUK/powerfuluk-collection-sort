@@ -292,44 +292,13 @@ async function handleProductUpdate(id, shop) {
 	}
 }
 
-// app.post('/webhooks', async (req, res) => {
-// 	try {
-// 		const tokenHeader = req.headers['x-shopify-hmac-sha256']
-// 		const shop = req.headers['x-shopify-shop-domain']
-// 		let sig
-
-// 		switch (shop) {
-// 			case '4ee229.myshopify.com':
-// 				sig = process.env.SHOPIFY_WEBHOOK_AUTH_PUK
-// 				break
-// 			case 'trade4x4.myshopify.com':
-// 				sig = process.env.SHOPIFY_WEBHOOK_AUTH_TRADE
-// 				break
-// 		}
-
-// 		const isAuth = validateWebhook(req.body, tokenHeader, sig)
-// 		if (!isAuth) {
-// 			res.sendStatus(401)
-// 			return
-// 		}
-
-// 		const data = JSON.parse(req.body.toString())
-// 		handleProductUpdate(data.id, shop)
-
-// 		res.sendStatus(200)
-// 	} catch (error) {
-// 		console.error(error)
-// 		res.sendStatus(500)
-// 	}
-// })
-
 app.post('/webhooks-filtered', async (req, res) => {
 	try {
 		const shop = req.headers['x-shopify-shop-domain']
 
 		const { webhooks } = getShopify(shop)
-		const { valid, topic, domain } = await webhooks.validate({
-			rawBody: req.body, // is a string
+		const { valid } = await webhooks.validate({
+			rawBody: req.body,
 			rawRequest: req,
 			rawResponse: res,
 		})
