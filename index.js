@@ -143,7 +143,7 @@ async function setUpSubscriptions() {
 						callbackUrl:
 							process.env.NODE_ENV === 'production'
 								? `https://${process.env.FLY_APP_NAME}.fly.dev/webhooks-filtered`
-								: `${process.env.HOST}/webhooks-filtered`,
+								: `${process.env.DEV_HOST}/webhooks-filtered`,
 						format: 'JSON',
 						filter: 'metafields.key:product_order OR metafields.key:related_products_from_volo',
 						includeFields: ['id', 'metafields'],
