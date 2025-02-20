@@ -158,6 +158,39 @@ async function setUpSubscriptions() {
 				JSON.stringify(res.data.webhookSubscriptionCreate.userErrors)
 			)
 		}
+
+		const res2 = await client.request(
+			`
+            mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $webhookSubscription: WebhookSubscriptionInput!) {
+                webhookSubscriptionCreate(topic: $topic, webhookSubscription: $webhookSubscription) {
+                    userErrors {
+                        field
+                        message
+                    }
+                }
+            }`,
+			{
+				variables: {
+					topic: 'PRODUCTS_CREATE',
+					webhookSubscription: {
+						callbackUrl:
+							process.env.NODE_ENV === 'production'
+								? `https://${process.env.FLY_APP_NAME}.fly.dev/webhooks-filtered`
+								: `${process.env.DEV_HOST}/webhooks-filtered`,
+						format: 'JSON',
+						// filter: 'metafields.key:product_order OR metafields.key:related_products_from_volo',
+						// includeFields: ['id', 'metafields'],
+						// metafieldNamespaces: ['custom'],
+					},
+				},
+			}
+		)
+
+		if (res2.data.webhookSubscriptionCreate.userErrors.length) {
+			console.error(
+				JSON.stringify(res2.data.webhookSubscriptionCreate.userErrors)
+			)
+		}
 	}
 }
 
